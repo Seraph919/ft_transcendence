@@ -93,7 +93,7 @@ The application is deployed at **https://guild-chat.tech** and runs locally with
                                      │  HTTPS / WSS
                                      ▼
                     ┌────────────────────────────────┐
-                    │   nginx + ModSecurity (WAF)    │   :443
+                    │   nginx + ModSecurity (WAF)    │   :8443
                     │   TLS · rate limiting · OWASP  │
                     └────────────────────────────────┘
                        │        │         │        │
@@ -533,44 +533,221 @@ sizing, firewall rules, VM bootstrap and the GitHub Actions secrets
 
 ## Modules
 
-Source review: 10 October 2026. **Complete** means the repository contains the implementation described below.
-Points follow the proposed Major = 2, Minor = 1 mapping. The modules of choice remain subject to evaluation approval.
+**Chosen modules: 19 points = 7 Major × 2 + 5 Minor × 1.** The organization-system
+candidate below would bring the total to 21 if accepted. The custom WAF module also
+requires evaluator acceptance; this table records the team's choices, not an awarded score.
 
-| # | Category | Module | Type | Points | Status |
-| -: | --- | --- | --- | ---: | --- |
-| 1 | Web | Framework for frontend and backend | Major | 2 | Complete |
-| 2 | Web | Real-time features with WebSockets | Major | 2 | Complete |
-| 3 | Web | User interaction: chat, profiles, friends | Major | 2 | Complete |
-| 4 | Web | ORM for the database | Minor | 1 | Complete |
-| 5 | Web | Custom design system | Minor | 1 | Complete |
-| 6 | User Management | Standard user management and authentication | Major | 2 | Complete |
-| 7 | User Management | Advanced permissions system | Major | 2 | Complete |
-| 8 | User Management | Organization system | Major | 2 | Complete |
-| 9 | Modules of choice | Hardened ModSecurity WAF | Minor | 1 | Complete |
-| 10 | DevOps | Prometheus and Grafana monitoring | Major | 2 | Complete |
-| 11 | DevOps | Backend as microservices | Major | 2 | Complete |
-| 12 | DevOps | Health checks, status page, backups and disaster recovery | Minor | 1 | Complete |
-| 13 | Modules of choice | CI/CD pipeline and automated deployment | Major | 2 | Complete |
+| # | Category | Module | Type | Points | Owner |
+|---|---|---|---|---:|---|
+| 1 | Web | Framework for frontend **and** backend | Major | 2 | rahmoham, obendaou, mlakhdar, asajed |
+| 2 | Web | Real-time features (WebSockets) | Major | 2 | mlakhdar |
+| 3 | Web | User interaction (chat, profiles, friends) | Major | 2 | rahmoham, obendaou, mlakhdar |
+| 4 | Web | ORM for the database | Minor | 1 | obendaou, asajed |
+| 5 | Web | Custom design system | Minor | 1 | rahmoham |
+| 6 | Accessibility & i18n | Support for additional browsers | Minor | 1 | rahmoham |
+| 7 | User Management | Standard user management and authentication | Major | 2 | obendaou |
+| 8 | User Management | Advanced permissions system | Major | 2 | asajed |
+| 9 | Modules of choice | Hardened ModSecurity WAF | Minor | 1 | asoudani |
+| 10 | DevOps | Monitoring with Prometheus and Grafana | Major | 2 | asoudani |
+| 11 | DevOps | Backend as microservices | Major | 2 | asoudani |
+| 12 | DevOps | Health checks, status page, automated backups and disaster recovery | Minor | 1 | asoudani |
+| | | | | **19** | |
 
-### Implementation proof
+### 1 · Framework for both frontend and backend — Major (2 pts)
 
-- **Frontend and backend frameworks:** React in [gateway-frontend/frontend](gateway-frontend/frontend/package.json), Spring Boot in [org-service](application/org-service/pom.xml) and [chat-service](application/chat-service/pom.xml), and Fastify in [identity-service](application/identity-service/src/app.ts).
-- **Real-time WebSockets:** The chat service's [websocket package](application/chat-service/src/main/java/com/fttranscendence/chatservice/websocket) implements connections, subscriptions, broadcasts and presence. The frontend's [messages.js](gateway-frontend/frontend/src/api/messages.js) manages the shared socket; [useRoomMessages.js](gateway-frontend/frontend/src/hooks/useRoomMessages.js) subscribes to room updates.
-- **User interaction:** [chat-service](application/chat-service/src/main/java/com/fttranscendence/chatservice) implements messaging. The identity service's [user routes](application/identity-service/src/routes/user.routes.ts) and [friendship routes](application/identity-service/src/routes/friendship.routes.ts) expose profiles and friendships. Their interfaces live under [gateway-frontend/frontend/src/components](gateway-frontend/frontend/src/components).
-- **ORM:** Identity uses [Prisma models](application/identity-service/prisma/schema.prisma); organization uses [Spring Data JPA repositories](application/org-service/src/main/java/com/ft_transcendence/orgservice/repository). Chat uses [Spring Data MongoDB](application/chat-service/src/main/java/com/fttranscendence/chatservice/repository/MessageRepository.java) for document persistence.
-- **Custom design system:** [index.css](gateway-frontend/frontend/src/index.css) defines shared colors, typography, spacing and other tokens. [components/ui/index.js](gateway-frontend/frontend/src/components/ui/index.js) exports more than 10 reusable UI components, including buttons, inputs, avatars, tabs, dialogs and feedback states.
-- **Standard user management:** Identity implements registration, login, refresh and logout through [auth routes](application/identity-service/src/routes/auth.routes.ts), plus profile editing, avatar uploads and friendships through its [routes](application/identity-service/src/routes). Chat provides online status through [PresenceRegistry.java](application/chat-service/src/main/java/com/fttranscendence/chatservice/websocket/PresenceRegistry.java).
-- **Advanced permissions:** [RoomService.java](application/org-service/src/main/java/com/ft_transcendence/orgservice/service/RoomService.java) enforces room membership and `OWNER`, `ADMIN` and `MEMBER` roles. Owners can change member roles; owners and admins can manage membership. The frontend's [room components](gateway-frontend/frontend/src/components/rooms) show actions according to the current member's role.
-- **Organization system:** Group rooms serve as organizations. [RoomController.java](application/org-service/src/main/java/com/ft_transcendence/orgservice/controller/RoomController.java) exposes room creation, viewing, updates, membership management and role changes. [RoomService.java](application/org-service/src/main/java/com/ft_transcendence/orgservice/service/RoomService.java) deletes a room when its owner leaves as the last member; the controller has no standalone room-deletion endpoint.
-- **Hardened WAF:** The [gateway Dockerfile](gateway-frontend/gateway/Dockerfile) uses the ModSecurity/OWASP CRS image. [nginx.conf](gateway-frontend/gateway/nginx.conf) configures HTTPS, proxy routes and API rate limits, while [modsecurity-override.conf](gateway-frontend/gateway/modsec/modsecurity-override.conf) enables blocking and request-body limits. WebSocket and selected monitoring routes have explicit WAF exclusions.
-- **Monitoring:** [monitoring/prometheus](monitoring/prometheus/prometheus.yml) configures metric scrapes and alert rules. [monitoring/grafana](monitoring/grafana) contains provisioned data sources and dashboards; [Alertmanager configuration](monitoring/prometheus/alertmanager.yml) provides notification routing. Prometheus scrapes chat, organization, Docker and NGINX metrics; identity currently has health checks rather than a Prometheus scrape.
-- **Microservices:** [docker-compose.yml](docker-compose.yml) defines separate identity, organization and chat services under [application](application), with independent runtimes and data stores: two PostgreSQL instances and MongoDB. The services communicate through HTTP and internal gRPC APIs.
-- **Health, status and recovery:** [docker-compose.yml](docker-compose.yml) defines container health checks, and [Gatus configuration](monitoring/status-page/config.yaml) defines status-page checks. The [backup service](databases/backup-recovery/backup-service/backup.sh) creates scheduled database dumps. [backup.sh](databases/backup-recovery/scripts/backup.sh), [restore.sh](databases/backup-recovery/scripts/restore.sh) and [test-disaster-recovery.sh](databases/backup-recovery/scripts/test-disaster-recovery.sh) provide manual snapshots, restoration and a recovery verification procedure.
-- **CI/CD:** [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml) lints and builds the frontend, tests both Spring Boot services, tests and builds identity, and checks Compose and monitoring. After those jobs pass on a push to `main`, the workflow deploys the tested commit to the OCI VM over SSH using [deploy/deploy.sh](deploy/deploy.sh). Deployment requires the configured repository secrets and VM setup.
+*Why:* a project split across four deployable units needs conventions, not glue code.
 
-### Total
+*How:* the frontend is a **React 19** application built with Vite, using `react-router-dom`
+for routing and the guarded-route pattern in
+[`gateway-frontend/frontend/src/App.jsx`](gateway-frontend/frontend/src/App.jsx).
+**Fastify 5** serves identity's TypeScript HTTP API, with Zod validation and Prisma
+repositories. **Spring Boot** serves chat and org, with MongoDB and JPA persistence
+respectively. obendaou owns identity's framework implementation; rahmoham owns React,
+mlakhdar owns chat and asajed owns org.
 
-- Completed: **13 modules — 22 points** (9 major modules and 4 minor modules).
+### 2 · Real-time features (WebSockets) — Major (2 pts)
+
+*Why:* a chat application is only convincing if messages arrive without a refresh.
+
+*How:* `chat-service` exposes a native WebSocket endpoint at `/ws/chat`. The token is
+validated during the handshake by `TokenHandshakeInterceptor` — an unauthenticated socket is
+never established. `SubscriptionRegistry` maps sessions to rooms so `RoomBroadcaster` fans a
+message out only to the sessions that need it, rather than to every connected client.
+`PresenceRegistry` tracks each user's sockets and schedules an offline notification
+5 seconds after their last socket closes. Reconnecting within that grace period
+cancels the notification. The protocol (`WsEvents`) carries room subscriptions,
+message events, errors, and `presence.subscribe` / `presence.unsubscribe` requests
+with `presence.snapshot` / `presence.changed` responses. On the client,
+`api/messages.js` owns the shared socket and restores subscriptions after reconnect;
+`useRoomMessages` and `usePresence` consume its updates. Presence no longer polls REST,
+while `GET /api/chat/presence` remains available for snapshots. See the
+[presence guide](docs/PRESENCE.md) and [chat API contract](application/chat-service/API_CONTRACT.md).
+
+*Multi-user support:* concurrent writes are safe by construction — message identity comes
+from MongoDB, and membership uniqueness is enforced by a database constraint rather than a
+read-then-write check.
+
+### 3 · User interaction (chat, profiles, friends) — Major (2 pts)
+
+*Why:* the module's three requirements are the core of the product.
+
+*How:* **Chat** — rooms and DMs with persisted history, replies and edits.
+**Profiles** — viewable user profiles with display name, bio and avatar, openable from any
+member list or message. **Friends** — send, accept and decline requests, list pending
+requests and remove accepted friends through identity's `friendships` table. Chat
+provides live online status. Cancellation of outgoing pending requests remains an
+integration gap.
+
+### 4 · ORM for the database — Minor (1 pt)
+
+*Why:* hand-written SQL across two relational schemas and three services would be the
+largest source of drift in the project.
+
+*How:* obendaou uses **Prisma 7** in `identity-service`, with `User`, `RefreshToken`
+and `Friendship` models, generated TypeScript queries, a PostgreSQL adapter and
+versioned SQL migrations. asajed uses **Spring Data JPA / Hibernate** in `org-service`.
+Chat uses Spring Data MongoDB repositories for message documents.
+
+### 5 · Custom design system — Minor (1 pt)
+
+*Why:* we deliberately did not adopt a component library, so that the interface would be
+ours and internally consistent.
+
+*How:* a token layer in [`gateway-frontend/frontend/src/index.css`](gateway-frontend/frontend/src/index.css) defines
+the colour palette (dark theme with a crimson accent), typography scale (Inter, self-hosted),
+spacing, radii, shadows and semantic aliases. Built on it are **11 reusable components** in
+[`gateway-frontend/frontend/src/components/ui/`](gateway-frontend/frontend/src/components/ui/) — exceeding the
+10-component minimum:
+
+`Avatar` · `Button` · `Card` · `ConfirmDialog` · `Feedback` · `IconButton` · `Input` ·
+`Skeleton` · `SlidePanel` · `StatusDot` · `Tabs`
+
+Icons come from `react-icons`. Every feature component composes these rather than
+redefining its own buttons or avatars — `ConfirmDialog` in particular replaced the last
+native `window.confirm` / `window.alert` calls in the codebase.
+
+### 6 · Support for additional browsers — Minor (1 pt)
+
+*Why:* the mandatory target is Chrome, but a chat client people actually use has to work
+wherever they already are.
+
+*How:* the application is tested and functional in **Mozilla Firefox** and **Microsoft
+Edge** in addition to Chrome. The build targets baseline-widely-available features through
+Vite's default browser targets; no vendor-prefixed or Chrome-only APIs are used. The
+WebSocket client, `fetch`-based API layer and CSS custom-property token system are all
+standard across the three engines, giving a consistent UI and identical feature set.
+
+### 7 · Standard user management and authentication — Major (2 pts)
+
+*Why:* the mandatory user system, taken to the module's bar.
+
+*How:* users update their profile information (display name, username, bio); upload an
+avatar, with a generated default when none is set; add other users as friends and see their
+online status; and have a profile page that any other user can open. Authentication uses
+bcrypt-hashed passwords (cost 12), HS256 JWTs and rotating refresh tokens with reuse
+detection. obendaou maintains these APIs in Fastify, Zod and Prisma, including
+single-session logout and authenticated logout of all refresh sessions. The
+frontend's current logout request still needs to match the API; see
+[Known Limitations](#known-limitations).
+
+### 8 · Advanced permissions system — Major (2 pts)
+
+*Why:* a shared room needs an answer to "who is allowed to do this", and that answer has to
+be enforced on the server.
+
+*How:* `org-service` models `OWNER`, `ADMIN` and `MEMBER` roles through the
+`roles` / `member_roles` tables. Full CRUD over rooms and memberships is exposed at
+`/rooms` — create, read, update, delete rooms; add, remove and list members; read and assign
+roles. Each action is authorised against the caller's role in that specific room, so the
+permission check is per-resource rather than global. Different roles get different views and
+actions: only owners and admins see the add-member and kick controls, only owners can delete
+or rename a room, and `OWNER` cannot be assigned to another member.
+
+### 9 · Hardened ModSecurity WAF — Minor, Module of choice (1 pt)
+
+*Why:* everything in this project is exposed to the public internet on a real domain. We
+wanted a defensive layer that inspects requests rather than trusting the application tier to
+be flawless. We claim it as a Module of choice because our implementation covers the WAF
+half of the Cybersecurity module thoroughly, without the HashiCorp Vault component — see
+[Known Limitations](#known-limitations).
+
+*How:* [`gateway-frontend/gateway/`](gateway-frontend/gateway/) builds on `owasp/modsecurity-crs:nginx`, running **ModSecurity
+v3 with OWASP Core Rule Set v4** in blocking mode. Configuration:
+
+- Paranoia levels (`PARANOIA`, `BLOCKING_PARANOIA`) and engine mode through
+  the gateway environment in Compose, currently fixed to paranoia 1 and blocking mode.
+- An explicit allowed-method list.
+- Per-route rule-engine control — inspection is disabled for the WebSocket upgrade path and
+  for the Grafana, Prometheus and status-page proxies, where CRS produces false positives on
+  legitimate traffic.
+- Rate limiting at 20 r/s per IP with a burst of 30, returning HTTP 429.
+- IP allowlisting (loopback and RFC1918 ranges only) on `/nginx_status`, `/prometheus/` and
+  `/metrics.prom`.
+- TLS 1.2/1.3 termination with an HTTP→HTTPS redirect.
+
+Full routing table and policy detail: [`gateway-frontend/gateway/README.md`](gateway-frontend/gateway/README.md).
+
+### 10 · Monitoring with Prometheus and Grafana — Major (2 pts)
+
+*Why:* operators need service health, resource usage and alerts across the whole stack.
+
+*How:* **Prometheus** scrapes five jobs: chat and org via Micrometer Actuator
+endpoints, the Nginx gateway via `nginx-exporter`, a custom container exporter, and itself.
+Identity has a Fastify `/health` endpoint checked by Docker and Gatus; it does not
+currently expose application metrics for Prometheus.
+The **docker-exporter** is a bash service we wrote that publishes per-container metrics on
+port 8090. **Grafana** serves two dashboards (`microservices-dashboard.json`,
+`docker-metrics.json`) under an authenticated subpath with anonymous access disabled.
+**Alertmanager** routes rules — `MicroserviceDown`, `ContainerDown`, `ContainerOOMKilled`,
+`HighContainerCpuUsage`, `HighContainerMemoryUsage`, `HighHttp5xxErrorRate` — to Discord.
+Details: [`monitoring/README.md`](monitoring/README.md).
+
+### 11 · Backend as microservices — Major (2 pts)
+
+*Why:* three people owning three services could work in parallel with far less contention
+than three people in one codebase — and it forced us to make contracts explicit.
+
+*How:* the backend consists of a Fastify identity service and two Spring Boot services,
+each with its own responsibility and datastore. asoudani owns their integration and
+deployment; obendaou, asajed and mlakhdar own their respective service implementations.
+
+| Service | Runtime | Responsibility | Internal ports | Store |
+|---|---|---|---|---|
+| `identity-service` | Node.js / TypeScript / Fastify | Authentication, profiles, avatars, friendships | 8083 HTTP, 9090 gRPC | PostgreSQL `transdb` via Prisma |
+| `org-service` | Java / Spring Boot | Rooms, DMs, membership, roles | 8082 HTTP, 9090 gRPC | PostgreSQL `org_service_db` via JPA |
+| `chat-service` | Java / Spring Boot | Messages, WebSocket delivery, presence | 8081 HTTP/WS, 9090 gRPC | MongoDB `chatdb` |
+
+Communication is by **gRPC** with Protocol Buffers contracts
+([identity proto](application/identity-service/src/grpc/identity.proto) and
+`application/{chat-service,org-service}/src/main/proto/*.proto`). Chat uses a
+configurable 500 ms deadline for identity and membership calls; org's identity
+client currently has no explicit deadline.
+`identity-service` exposes `ValidateToken`, `GetUser` and `AreFriends`; `org-service`
+exposes membership lookups to `chat-service`. No service reaches into another's database.
+Authentication has exactly one owner: `chat-service` performs no local JWT parsing and
+delegates every token check to `identity-service`.
+
+### 12 · Health checks, status page, automated backups and disaster recovery — Minor (1 pt)
+
+*Why:* a deployment you cannot restore is a deployment you do not really have.
+
+*How:*
+
+- **Health checks** on the databases, application services and selected infrastructure
+  components, with Compose dependency conditions controlling startup. Identity also
+  waits for `identity-migrate` to complete.
+- **Status page** — Gatus monitors 7 endpoints at `https://status.${DOMAIN}/`.
+- **Automated backups** — a `backup-service` container snapshots PostgreSQL and MongoDB on a
+  schedule ([`databases/backup-recovery/backup-service/`](databases/backup-recovery/backup-service/)).
+- **Disaster recovery** — [`databases/backup-recovery/scripts/restore.sh`](databases/backup-recovery/scripts/) restores from a snapshot, and
+  `databases/backup-recovery/scripts/test-disaster-recovery.sh` runs an automated five-step verification that the
+  procedure actually works. Documented in [`databases/backup-recovery/scripts/README.md`](databases/backup-recovery/scripts/README.md).
+
+### Bonus candidate (not counted in the 19)
+
+**Organization system — Major (2 pts).** `org-service` implements create, read, update and
+delete for rooms; adding and removing users; and scoped per-room actions gated by role. If
+rooms are accepted as organizations, this module applies and the total becomes 21.
 
 ---
 

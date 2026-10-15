@@ -17,8 +17,10 @@ services:
       - MODSEC_RULE_ENGINE=on
       - ALLOWED_METHODS=GET HEAD POST OPTIONS PUT PATCH DELETE
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:8080"
+      - "8443:8443"
+      # - "80:8080"
+      # - "443:8443"
     volumes:
       - ./certs:/certs:ro
       - nginx_tls:/etc/nginx/conf
@@ -34,7 +36,7 @@ services:
       org-service:
         condition: service_healthy
       grafana:
-        condition: service_healthy
+        condition: service_started
       prometheus:
         condition: service_started
       docker-exporter:
@@ -42,7 +44,7 @@ services:
       status-page:
         condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -287,9 +289,9 @@ services:
       - ./monitoring/grafana/:/etc/grafana/provisioning:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
-      interval: 15s
+      interval: 60s
       timeout: 5s
-      retries: 5
+      retries: 15
     environment:
       GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL}
       GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}

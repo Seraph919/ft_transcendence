@@ -70,16 +70,3 @@ restore:
 
 test-recovery:
 	@./databases/backup-recovery/scripts/test-disaster-recovery.sh
-
-status:
-	@STATUS_USER=$$(grep -E '^STATUS_PAGE_USER=' .env 2>/dev/null | cut -d= -f2-); \
-	STATUS_PASS=$$(grep -E '^STATUS_PAGE_PASSWORD=' .env 2>/dev/null | cut -d= -f2-); \
-	set --; \
-	if [ -n "$$STATUS_USER" ] && [ -n "$$STATUS_PASS" ]; then \
-		set -- --user "$$STATUS_USER:$$STATUS_PASS"; \
-	fi; \
-	STATUS_JSON=$$(curl -kfsS "$$@" --resolve status.localhost:443:127.0.0.1 https://status.localhost/api/v1/endpoints/statuses) || { \
-		echo "Could not fetch status. Check credentials or open https://status.localhost/ in your browser." >&2; \
-		exit 1; \
-	}; \
-	printf '%s\n' "$$STATUS_JSON" | jq '.[] | {name: .name, group: .group, status: (if .results[-1].success then "HEALTHY" else "UNHEALTHY" end), duration_ms: (.results[-1].duration / 1000000)}'
